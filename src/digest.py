@@ -1,5 +1,5 @@
+import os
 from pathlib import Path
-from src.config import Settings
 
 def send_discord(webhook_url, text):
     if not webhook_url:
@@ -12,13 +12,13 @@ def send_discord(webhook_url, text):
         return False
 
 def main():
-    settings = Settings()
+    webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
     text = "WPC Op-Ed Engine test message\n\nThe app is working and sending messages to Discord."
     
     Path("data").mkdir(exist_ok=True)
     Path("data/daily_digest.txt").write_text(text, encoding="utf-8")
     
-    success = send_discord(settings.discord_webhook_url, text)
+    success = send_discord(webhook_url, text)
     
     if success:
         print("Discord message sent successfully")
