@@ -31,3 +31,4 @@ jobs:
         with:
           name: daily-output
           path: data/
+
