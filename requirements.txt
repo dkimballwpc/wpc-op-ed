@@ -1,0 +1,7 @@
+beautifulsoup4
+feedparser
+httpx
+lxml
+pandas
+python-dotenv
+scikit-learn
