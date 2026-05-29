@@ -1,32 +1,32 @@
 import os
-import yaml
 from pathlib import Path
 from src.config import Settings
 from src.collect_news import load_rss_from_yaml, load_rss
-from src.score import rank_topics
+from src.score import cluster_by_topic, match_to_wpc_topics, generate_explanation
 
 NEWS_FEEDS_YAML = "config/news_sources.yaml"
 
-WPC_DOCS = [
-    {"title": "WPC budget and taxes research", "text": "Washington Policy Center research on budget taxes government reform"},
-    {"title": "WPC education policy", "text": "Washington Policy Center research on education schools policy"},
-    {"title": "WPC environment energy", "text": "Washington Policy Center research on environment energy data centers energy costs"},
-    {"title": "WPC health care", "text": "Washington Policy Center research on health care insurance policy"},
-    {"title": "WPC transportation", "text": "Washington Policy Center research on transportation roads traffic"},
-    {"title": "WPC labor workforce", "text": "Washington Policy Center research on labor workforce worker rights"},
-    {"title": "WPC tech telecom", "text": "Washington Policy Center research on technology telecom"},
-]
-
-def render_digest(items):
+def render_digest(topics):
     lines = [
         "📰 WPC Daily Op-Ed Opportunities",
+        f"Top trends matched to WPC research",
         "",
     ]
-    for i, x in enumerate(items[:8], 1):
-        lines.append(f"{i}. {x.get('title', 'Untitled')[:80]}")
-        lines.append(f"   Fit score: {x.get('fit_score', 0):.2f}")
-        lines.append(f"   Link: {x.get('link', '')}")
+    
+    for i, topic in enumerate(topics[:5], 1):
+        title = topic["items"][0]["title"][:70]
+        topic_name = topic["wpc_topic"].replace("_", " ").title()
+        
+        lines.append(f"{i}. {topic_name}: {title}")
         lines.append("")
+        lines.append(generate_explanation(topic))
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+    
+    if not topics:
+        lines.append("No strong topic matches found today.")
+    
     return "\n".join(lines)
 
 def send_discord(webhook_url, text):
@@ -43,28 +43,25 @@ def send_discord(webhook_url, text):
 def main():
     settings = Settings()
     
-    # Load feeds
-    feed_urls = load_rss_from_yaml(NEWS_FEEDS_YAML)
+    wa_feeds, nat_feeds = load_rss_from_yaml(NEWS_FEEDS_YAML)
     
-    # Collect news
-    news = load_rss(feed_urls)
-    print(f"Collected {len(news)} news items")
+    wa_news = load_rss(wa_feeds, source_type="washington")
+    nat_news = load_rss(nat_feeds, source_type="national")
+    all_news = wa_news + nat_news
     
-    # Extract WPC text
-    wpc_texts = [f"{x.get('title','')} {x.get('text','')}" for x in WPC_DOCS]
+    print(f"Collected {len(wa_news)} WA news, {len(nat_news)} national news")
     
-    # Score
-    ranked = rank_topics(news, wpc_texts)
-    print(f"Ranked {len(ranked)} topics")
+    clusters = cluster_by_topic(all_news)
+    print(f"Clustered into {len(clusters)} topics")
     
-    # Render
+    ranked = match_to_wpc_topics(clusters)
+    print(f"Matched {len(ranked)} topics to WPC research")
+    
     text = render_digest(ranked)
     
-    # Save
     Path("data").mkdir(exist_ok=True)
     Path("data/daily_digest.txt").write_text(text, encoding="utf-8")
     
-    # Send
     success = send_discord(settings.discord_webhook_url, text)
     
     if success:
